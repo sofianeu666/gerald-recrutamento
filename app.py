@@ -1,4 +1,5 @@
 import random
+import time
 import streamlit as st
 
 st.set_page_config(page_title="O Número Secreto do Gerald", page_icon="🔢")
@@ -78,6 +79,13 @@ div[data-testid="stExpander"] {
     border-radius: 16px;
 }
 
+div[data-testid="stMetric"] {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+}
+
 div[data-testid="stAlert"] {
     background: var(--paper);
     border-left: 4px solid var(--accent);
@@ -118,6 +126,15 @@ MINIMO, MAXIMO = 1, 100
 # Probabilidade de a pista de um palpite falhado ser absurda (as outras são verdadeiras)
 PROB_PISTA_ABSURDA = 0.25
 
+# Das pistas verdadeiras, qual a probabilidade de ser do género «estás quente / frio»
+PROB_TEMPERATURA = 0.35
+
+# Pontuação: começa em PONTOS_INICIAIS e o Gerald vai cobrando
+PONTOS_INICIAIS = 1000
+PENALIZACAO_TENTATIVA = 40   # por cada tentativa a partir da segunda
+PENALIZACAO_SEGUNDO = 2      # por cada segundo desde o primeiro palpite
+PENALIZACAO_REPETICAO = 25   # por cada palpite repetido
+
 
 # --------------------------------------------------
 # TEXTOS
@@ -125,30 +142,29 @@ PROB_PISTA_ABSURDA = 0.25
 
 # Pistas absurdas (frases completas, para depois de cada palpite)
 PISTAS_ABSURDAS = [
-    "O número é um número.",
-    "O Gerald garante que o número não é nenhum animal. Exceto, talvez, ele próprio.",
-    "O número está algures. O Gerald não pode dizer mais, é confidencial.",
-    "Pista oficial: o número tem uma cor. O Gerald não vai dizer qual.",
-    "O número é mais ou menos do tamanho de um ganso. Depende do ganso.",
+    "O número secreto é um número.",
+    "O Gerald garante que o número secreto não é nenhum animal. Exceto, talvez, ele próprio.",
+    "O número secreto está algures. O Gerald não pode dizer mais, é confidencial.",
+    "Pista oficial: o número secreto tem uma cor. O Gerald não vai dizer qual.",
+    "O número secreto é mais ou menos do tamanho de um ganso. Depende do ganso.",
     "O Gerald sonhou com o número, mas acordou antes do fim.",
-    "O Gerald diz que o número prefere as terças-feiras.",
-    "O número tem medo de formulários. Isto não ajuda ninguém, mas é verdade.",
-    "O Gerald escreveu o número num post-it e perdeu o post-it.",
+    "O Gerald diz que o número secreto prefere as terças-feiras.",
+    "O número secreto tem medo de formulários. Isto não ajuda ninguém, mas é verdade.",
+    "O Gerald escreveu o número secreto num post-it e perdeu o post-it.",
     "HONK. (O Gerald garante que isto é uma pista. Não é.)",
-    "O número esteve de baixa médica na semana passada.",
+    "O número secreto esteve de baixa médica na semana passada.",
     "A pista de hoje foi cancelada por falta de orçamento.",
-    "O número não gosta de ser adivinhado. Tem direito a privacidade.",
+    "O número secreto não gosta de ser adivinhado. Tem direito a privacidade.",
     "O Gerald diz que estás «quente». Estava a falar da temperatura da sala.",
-    "Pista confidencial: o número é exatamente o número que é.",
+    "Pista confidencial: o número secreto é exatamente o número que é.",
     "O Gerald pediu uma segunda opinião ao ganso do departamento ao lado. Também não sabe.",
     "Esta pista está sob análise jurídica.",
-    "O número foi visto pela última vez perto da máquina do café.",
+    "O número secreto foi visto pela última vez perto da máquina do café.",
     "O Gerald pensou numa pista, mas ficou com fome e comeu-a.",
 ]
 
 # Pistas absurdas para o dossier inicial (fragmentos que continuam «O número...»)
 DOSSIER_ABSURDAS = [
-    "é maior do que o infinito em pé",
     "tem a cor do número",
     "nunca foi visto ao pé de uma impressora",
     "é amigo do ganso do departamento ao lado",
@@ -178,14 +194,14 @@ COMENTARIOS = [
 
 # Comentários para palpites específicos
 COMENTARIOS_ESPECIAIS = {
-    1: "O 1? O Gerald respeita a ambição de quem começa pelo princípio.",
+    1: "O 1. O Gerald respeita a coragem de quem tenta logo o limite mínimo.",
     7: "O 7. O Gerald diz que toda a gente tenta o 7. É estatística.",
     8: "O 8. O Gerald diz que isso é o infinito em pé e pediu que não o mexas.",
     13: "O 13. O Gerald fez uma pausa para uma cerimónia de mau agouro.",
     42: "O 42. O Gerald diz que essa é a resposta de outro jogo.",
     50: "O 50. O Gerald elogia a coragem de quem tenta sempre o meio.",
     69: "O 69. O Gerald corou e pediu que isto não conste da ata.",
-    100: "O 100. O Gerald diz que quem começa pelo fim tem pouca paciência.",
+    100: "O 100. O Gerald diz que quem tenta o limite máximo tem pouca paciência.",
 }
 
 # Comentários para marcos de tentativas
@@ -196,25 +212,97 @@ COMENTARIOS_MARCOS = {
     50: "50 tentativas. O Gerald enviou um email aos Recursos Humanos. Ele é os Recursos Humanos.",
 }
 
+# Pistas de temperatura (verdadeiras, calculadas pela distância ao número secreto)
+TEMPERATURAS = {
+    "gelado": [
+        "O Gerald diz que estás gelado. Longe, mesmo longe.",
+        "Gelado. O Gerald vestiu o casaco só de olhar para o teu palpite.",
+    ],
+    "frio": [
+        "O Gerald diz que estás frio. Está longe.",
+        "Frio. O Gerald está a ver a respiração dele a formar nuvens.",
+    ],
+    "morno": [
+        "O Gerald diz que estás morno. Nem frio nem quente.",
+        "Morno. O Gerald pediu um chá, que é a temperatura certa para isto.",
+    ],
+    "quente": [
+        "O Gerald diz que estás quente. Estás perto!",
+        "Quente! O Gerald começou a abanar as penas.",
+    ],
+    "escaldante": [
+        "O Gerald diz que estás escaldante. É mesmo aqui ao pé!",
+        "Escaldante! O Gerald escondeu o número atrás da prancheta.",
+    ],
+}
+
+# Avaliação final conforme a pontuação
+AVALIACOES = [
+    (800, "Desempenho exemplar. O Gerald está desconfiado."),
+    (500, "Desempenho aceitável. O Gerald vai arquivar o processo."),
+    (250, "Desempenho em análise. O Gerald pede mais dez palpites."),
+    (0, "Desempenho a justificar. O Gerald marcou-te uma reunião."),
+]
+
 
 # --------------------------------------------------
 # LÓGICA
 # --------------------------------------------------
 
+def categoria_temperatura(distancia):
+    if distancia >= 50:
+        return "gelado"
+    if distancia >= 25:
+        return "frio"
+    if distancia >= 10:
+        return "morno"
+    if distancia >= 4:
+        return "quente"
+    return "escaldante"
+
+
+def formatar_tempo(segundos):
+    segundos = int(segundos)
+    return f"{segundos // 60:02d}:{segundos % 60:02d}"
+
+
+def calcular_pontuacao(tentativas, segundos, repeticoes):
+    pontos = (
+        PONTOS_INICIAIS
+        - PENALIZACAO_TENTATIVA * (tentativas - 1)
+        - PENALIZACAO_SEGUNDO * int(segundos)
+        - PENALIZACAO_REPETICAO * repeticoes
+    )
+    return max(0, pontos)
+
+
+def avaliacao(pontuacao):
+    for minimo, texto in AVALIACOES:
+        if pontuacao >= minimo:
+            return texto
+
 def factos(segredo, palpite=None, incluir_final=True):
-    """Factos verdadeiros sobre o número, como fragmentos que continuam «O número...»."""
+    """Factos verdadeiros sobre o número secreto, como fragmentos que continuam «O número secreto...»."""
     algarismos = "um algarismo" if segredo < 10 else "dois algarismos" if segredo < 100 else "três algarismos"
     divisor = random.choice([3, 5, 7])
-    limite_baixo = max(MINIMO - 1, segredo - random.randint(1, 40))
-    limite_alto = min(MAXIMO + 1, segredo + random.randint(1, 40))
 
     lista = [
         "é par" if segredo % 2 == 0 else "é ímpar",
         f"tem {algarismos}",
         f"é múltiplo de {divisor}" if segredo % divisor == 0 else f"não é múltiplo de {divisor}",
-        f"é maior do que {limite_baixo}",
-        f"é menor do que {limite_alto}",
     ]
+
+    # Limites sempre dentro do intervalo do jogo (nada de «menor do que 101»)
+    if segredo > MINIMO:
+        lista.append(f"é maior do que {random.randint(max(MINIMO, segredo - 40), segredo - 1)}")
+    if segredo < MAXIMO:
+        lista.append(f"é menor do que {random.randint(segredo + 1, min(MAXIMO, segredo + 40))}")
+
+    # O infinito em pé é o 8
+    if segredo == 8:
+        lista.append("é exatamente o infinito em pé")
+    else:
+        lista.append("é maior do que o infinito em pé" if segredo > 8 else "é menor do que o infinito em pé")
 
     if incluir_final:
         lista.append(f"termina em {segredo % 10}")
@@ -243,6 +331,22 @@ def novo_jogo():
     st.session_state.ultima_pista = None
     st.session_state.ultimo_comentario = None
     st.session_state.venceu = False
+    st.session_state.inicio = None
+    st.session_state.fim = None
+    st.session_state.repeticoes = 0
+    st.session_state.pontuacao = None
+
+
+def finalizar_jogo():
+    st.session_state.venceu = True
+    st.session_state.fim = time.time()
+    segundos = st.session_state.fim - st.session_state.inicio
+    st.session_state.pontuacao = calcular_pontuacao(
+        len(st.session_state.palpites), segundos, st.session_state.repeticoes
+    )
+    melhor = st.session_state.melhor
+    if melhor is None or st.session_state.pontuacao > melhor:
+        st.session_state.melhor = st.session_state.pontuacao
 
 
 def nova_pista(palpite):
@@ -250,11 +354,14 @@ def nova_pista(palpite):
     for _ in range(10):
         if random.random() < PROB_PISTA_ABSURDA:
             pista = random.choice(PISTAS_ABSURDAS)
+        elif random.random() < PROB_TEMPERATURA:
+            distancia = abs(st.session_state.segredo - palpite)
+            pista = random.choice(TEMPERATURAS[categoria_temperatura(distancia)])
         else:
             abertura = random.choice([
-                "O Gerald garante que o número",
-                "Segundo o Gerald, o número",
-                "O Gerald diz, com ar solene, que o número",
+                "O Gerald garante que o número secreto",
+                "Segundo o Gerald, o número secreto",
+                "O Gerald diz, com ar solene, que o número secreto",
             ])
             pista = f"{abertura} {random.choice(factos(st.session_state.segredo, palpite))}."
         if pista != st.session_state.ultima_pista:
@@ -281,6 +388,9 @@ def mensagem_vitoria(tentativas):
     return "Acertaste, finalmente. O Gerald já ia abrir um processo por demora."
 
 
+if "melhor" not in st.session_state:
+    st.session_state.melhor = None
+
 if "segredo" not in st.session_state:
     novo_jogo()
 
@@ -302,9 +412,11 @@ with st.expander("Instruções", expanded=not st.session_state.palpites):
 2. Escreve um palpite e carrega em **Tentar**.
 3. O **dossier** já traz umas pistas à vista. Algumas são verdadeiras, outras são disparates do Gerald. Cabe-te a ti perceber quais.
 4. Quando falhas, o Gerald dá uma **pista** (quase sempre verdadeira, de vez em quando absurda) e faz um **comentário**.
-5. **Não podes repetir palpites.** Se repetires, o Gerald cobra taxa, mas a tentativa não conta.
-6. Não há limite de tentativas, mas o Gerald está a contá-las.
-7. Quando acertares, o Gerald reage consoante o tempo que demoraste.
+5. A pista também pode ser **frio ou quente**: quanto mais perto do número, mais quente.
+6. **Não podes repetir palpites.** Se repetires, o Gerald cobra uma taxa de {PENALIZACAO_REPETICAO} pontos.
+7. Não há limite de tentativas, mas o Gerald está a contá-las. O **relógio começa no primeiro palpite**.
+8. A **pontuação** começa em {PONTOS_INICIAIS}. Perdes {PENALIZACAO_TENTATIVA} pontos por cada tentativa a partir da segunda, {PENALIZACAO_SEGUNDO} por cada segundo e {PENALIZACAO_REPETICAO} por cada repetição.
+9. Quando acertares, o Gerald avalia o teu desempenho.
 """
     )
 
@@ -313,14 +425,31 @@ st.markdown(
     html(f"""
     <div class="dossier">
         <div class="dossier-label">Dossier deixado à vista pelo Gerald</div>
-        <div>O número...</div>
+        <div>O número secreto...</div>
         <ul>{itens}</ul>
     </div>
     """),
     unsafe_allow_html=True,
 )
 
+def mostrar_tempo():
+    if st.session_state.inicio is None:
+        st.caption("⏱ O relógio só começa no primeiro palpite.")
+    else:
+        decorrido = formatar_tempo(time.time() - st.session_state.inicio)
+        st.caption(f"⏱ Tempo: {decorrido}  ·  Tentativas: {len(st.session_state.palpites)}")
+
+
 if not st.session_state.venceu:
+    # O relógio atualiza-se sozinho a cada segundo (Streamlit recente); senão, só a cada jogada
+    ativo = st.session_state.inicio is not None
+    if hasattr(st, "fragment"):
+        try:
+            mostrar_tempo = st.fragment(run_every=1 if ativo else None)(mostrar_tempo)
+        except TypeError:
+            pass
+    mostrar_tempo()
+
     with st.form("palpite"):
         palpite = st.number_input(
             "O teu palpite",
@@ -334,17 +463,22 @@ if not st.session_state.venceu:
     if tentar:
         palpite = int(palpite)
 
+        if st.session_state.inicio is None:
+            st.session_state.inicio = time.time()
+
         if palpite in st.session_state.palpites:
+            st.session_state.repeticoes += 1
             st.session_state.mensagem = (
                 "aviso",
-                f"Já tentaste o {palpite}. O Gerald está a cobrar taxa por repetição.",
+                f"Já tentaste o {palpite}. O Gerald está a cobrar taxa por repetição: "
+                f"-{PENALIZACAO_REPETICAO} pontos.",
             )
         else:
             st.session_state.palpites.append(palpite)
             tentativas = len(st.session_state.palpites)
 
             if palpite == st.session_state.segredo:
-                st.session_state.venceu = True
+                finalizar_jogo()
                 st.session_state.mensagem = ("sucesso", mensagem_vitoria(tentativas))
             else:
                 st.session_state.mensagem = (
@@ -352,6 +486,9 @@ if not st.session_state.venceu:
                     f"**Não é o {palpite}.** {nova_pista(palpite)}\n\n"
                     f"*{novo_comentario(palpite, tentativas)}*",
                 )
+
+        # Redesenha já o ecrã (relógio a contar, formulário escondido ao ganhar)
+        st.rerun()
 
 if st.session_state.mensagem:
     tipo, texto = st.session_state.mensagem
@@ -367,4 +504,13 @@ if st.session_state.venceu:
     st.balloons()
     st.write(f"O número secreto era o **{st.session_state.segredo}**.")
 
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Tempo", formatar_tempo(st.session_state.fim - st.session_state.inicio))
+    c2.metric("Tentativas", len(st.session_state.palpites))
+    c3.metric("Pontuação", st.session_state.pontuacao)
+    st.write(f"**{avaliacao(st.session_state.pontuacao)}**")
+
 st.button("Novo jogo", on_click=novo_jogo)
+
+if st.session_state.melhor is not None:
+    st.caption(f"Melhor pontuação desta sessão: {st.session_state.melhor}")
