@@ -281,51 +281,134 @@ def avaliacao(pontuacao):
         if pontuacao >= minimo:
             return texto
 
+def numeros_que(predicado):
+    """Conjunto dos números do jogo que cumprem uma condição."""
+    return frozenset(n for n in range(MINIMO, MAXIMO + 1) if predicado(n))
+
+
 def factos(segredo, palpite=None, incluir_final=True):
-    """Factos verdadeiros sobre o número secreto, como fragmentos que continuam «O número secreto...»."""
-    algarismos = "um algarismo" if segredo < 10 else "dois algarismos" if segredo < 100 else "três algarismos"
+    """Factos verdadeiros sobre o número secreto.
+    Cada um é (fragmento que continua «O número secreto...», números compatíveis)."""
     divisor = random.choice([3, 5, 7])
+    algarismos = len(str(segredo))
+    nome_algarismos = {1: "um algarismo", 2: "dois algarismos", 3: "três algarismos"}[algarismos]
 
     lista = [
-        "é par" if segredo % 2 == 0 else "é ímpar",
-        f"tem {algarismos}",
-        f"é múltiplo de {divisor}" if segredo % divisor == 0 else f"não é múltiplo de {divisor}",
+        ("é par" if segredo % 2 == 0 else "é ímpar",
+         numeros_que(lambda n, r=segredo % 2: n % 2 == r)),
+        (f"tem {nome_algarismos}",
+         numeros_que(lambda n, k=algarismos: len(str(n)) == k)),
     ]
+
+    if segredo % divisor == 0:
+        lista.append((f"é múltiplo de {divisor}", numeros_que(lambda n, d=divisor: n % d == 0)))
+    else:
+        lista.append((f"não é múltiplo de {divisor}", numeros_que(lambda n, d=divisor: n % d != 0)))
 
     # Limites sempre dentro do intervalo do jogo (nada de «menor do que 101»)
     if segredo > MINIMO:
-        lista.append(f"é maior do que {random.randint(max(MINIMO, segredo - 40), segredo - 1)}")
+        t = random.randint(max(MINIMO, segredo - 40), segredo - 1)
+        lista.append((f"é maior do que {t}", numeros_que(lambda n, t=t: n > t)))
     if segredo < MAXIMO:
-        lista.append(f"é menor do que {random.randint(segredo + 1, min(MAXIMO, segredo + 40))}")
+        t = random.randint(segredo + 1, min(MAXIMO, segredo + 40))
+        lista.append((f"é menor do que {t}", numeros_que(lambda n, t=t: n < t)))
 
     # O infinito em pé é o 8
     if segredo == 8:
-        lista.append("é exatamente o infinito em pé")
+        lista.append(("é exatamente o infinito em pé", numeros_que(lambda n: n == 8)))
+    elif segredo > 8:
+        lista.append(("é maior do que o infinito em pé", numeros_que(lambda n: n > 8)))
     else:
-        lista.append("é maior do que o infinito em pé" if segredo > 8 else "é menor do que o infinito em pé")
+        lista.append(("é menor do que o infinito em pé", numeros_que(lambda n: n < 8)))
 
     if incluir_final:
-        lista.append(f"termina em {segredo % 10}")
+        lista.append((f"termina em {segredo % 10}",
+                      numeros_que(lambda n, d=segredo % 10: n % 10 == d)))
 
     if palpite is not None:
         # A pista clássica: mais alto ou mais baixo (com peso a dobrar)
-        direcao = "é maior do que o teu palpite" if segredo > palpite else "é menor do que o teu palpite"
+        if segredo > palpite:
+            direcao = ("é maior do que o teu palpite", numeros_que(lambda n, p=palpite: n > p))
+        else:
+            direcao = ("é menor do que o teu palpite", numeros_que(lambda n, p=palpite: n < p))
         lista += [direcao, direcao]
 
     return lista
 
 
+def corta_o_suficiente(candidatos, conjunto):
+    """Uma pista só vale a pena se tirar números a sério (pelo menos 5% dos que restam).
+    Assim o Gerald não diz «maior do que 8» a quem já sabe que o número tem dois algarismos."""
+    minimo = max(1, -(-len(candidatos) * 5 // 100))
+    return len(candidatos) - len(candidatos & conjunto) >= minimo
+
+
+def escolher_util(opcoes, candidatos):
+    """Escolhe uma opção que traga informação nova. Se nenhuma trouxer, aceita a menos má."""
+    uteis = [o for o in opcoes if corta_o_suficiente(candidatos, o[1])]
+    if not uteis:
+        uteis = [o for o in opcoes if len(candidatos & o[1]) < len(candidatos)]
+    return random.choice(uteis or opcoes)
+
+
+def intersecao(conjuntos):
+    resultado = set(range(MINIMO, MAXIMO + 1))
+    for conjunto in conjuntos:
+        resultado &= conjunto
+    return resultado
+
+
+def todas_necessarias(conjuntos, minimo):
+    """Cada pista tem de acrescentar informação que as outras não dão (pelo menos `minimo` números)."""
+    total = len(intersecao(conjuntos))
+    return all(
+        len(intersecao(conjuntos[:i] + conjuntos[i + 1:])) - total >= minimo
+        for i in range(len(conjuntos))
+    )
+
+
 def pistas_iniciais(segredo):
-    """Dossier inicial: três pistas verdadeiras e uma absurda, por ordem aleatória."""
-    dossier = random.sample(factos(segredo, incluir_final=False), 3)
-    dossier.append(random.choice(DOSSIER_ABSURDAS))
+    """Dossier inicial: três pistas verdadeiras e uma absurda.
+    Nenhuma pista verdadeira pode ser consequência das outras
+    (por exemplo, «dois algarismos» e «maior do que 8» nunca aparecem juntas).
+    Devolve as pistas e os números que ainda são possíveis depois delas."""
+    opcoes = factos(segredo, incluir_final=False)
+    escolhidas = []
+
+    for minimo in (3, 2, 1):  # se for difícil, vai-se aceitando pistas menos exigentes
+        random.shuffle(opcoes)
+        escolhidas = []
+        for fragmento, conjunto in opcoes:
+            conjuntos = [c for _, c in escolhidas] + [conjunto]
+            if todas_necessarias(conjuntos, minimo):
+                escolhidas.append((fragmento, conjunto))
+                if len(escolhidas) == 3:
+                    break
+        if len(escolhidas) == 3:
+            break
+
+    # Último recurso: completa com pistas verdadeiras, mesmo que repitam informação
+    for fragmento, conjunto in opcoes:
+        if len(escolhidas) == 3:
+            break
+        if (fragmento, conjunto) in escolhidas:
+            continue
+        ja_ditas = " ".join(f for f, _ in escolhidas)
+        if "algarismo" in ja_ditas and "infinito" in fragmento:
+            continue
+        if "infinito" in ja_ditas and "algarismo" in fragmento:
+            continue
+        escolhidas.append((fragmento, conjunto))
+
+    candidatos = intersecao([c for _, c in escolhidas])
+    dossier = [f for f, _ in escolhidas] + [random.choice(DOSSIER_ABSURDAS)]
     random.shuffle(dossier)
-    return dossier
+    return dossier, candidatos
 
 
 def novo_jogo():
     st.session_state.segredo = random.randint(MINIMO, MAXIMO)
-    st.session_state.dossier = pistas_iniciais(st.session_state.segredo)
+    st.session_state.dossier, st.session_state.candidatos = pistas_iniciais(st.session_state.segredo)
     st.session_state.palpites = []
     st.session_state.mensagem = None
     st.session_state.ultima_pista = None
@@ -350,23 +433,38 @@ def finalizar_jogo():
 
 
 def nova_pista(palpite):
+    segredo = st.session_state.segredo
+    candidatos = st.session_state.candidatos
+
     # Evita repetir a mesma pista duas vezes seguidas
     for _ in range(10):
+        conjunto = None
+
         if random.random() < PROB_PISTA_ABSURDA:
             pista = random.choice(PISTAS_ABSURDAS)
-        elif random.random() < PROB_TEMPERATURA:
-            distancia = abs(st.session_state.segredo - palpite)
-            pista = random.choice(TEMPERATURAS[categoria_temperatura(distancia)])
         else:
-            abertura = random.choice([
-                "O Gerald garante que o número secreto",
-                "Segundo o Gerald, o número secreto",
-                "O Gerald diz, com ar solene, que o número secreto",
-            ])
-            pista = f"{abertura} {random.choice(factos(st.session_state.segredo, palpite))}."
+            categoria = categoria_temperatura(abs(segredo - palpite))
+            conj_temp = numeros_que(
+                lambda n: categoria_temperatura(abs(n - palpite)) == categoria
+            )
+
+            if random.random() < PROB_TEMPERATURA and corta_o_suficiente(candidatos, conj_temp):
+                pista, conjunto = random.choice(TEMPERATURAS[categoria]), conj_temp
+            else:
+                fragmento, conjunto = escolher_util(factos(segredo, palpite), candidatos)
+                abertura = random.choice([
+                    "O Gerald garante que o número secreto",
+                    "Segundo o Gerald, o número secreto",
+                    "O Gerald diz, com ar solene, que o número secreto",
+                ])
+                pista = f"{abertura} {fragmento}."
+
         if pista != st.session_state.ultima_pista:
             break
+
     st.session_state.ultima_pista = pista
+    if conjunto is not None:
+        st.session_state.candidatos = candidatos & conjunto
     return pista
 
 
@@ -476,6 +574,7 @@ if not st.session_state.venceu:
         else:
             st.session_state.palpites.append(palpite)
             tentativas = len(st.session_state.palpites)
+            st.session_state.candidatos = st.session_state.candidatos - {palpite}
 
             if palpite == st.session_state.segredo:
                 finalizar_jogo()
