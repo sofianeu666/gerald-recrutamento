@@ -110,6 +110,52 @@ div[data-testid="stFormSubmitButton"] > button:hover {
     color: white;
 }
 
+/* Modal de boas-vindas */
+div[data-testid="stDialog"] > div {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+}
+
+.welcome-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-top: 6px solid var(--accent);
+    border-radius: 16px;
+    padding: 24px;
+    margin: 8px 0 18px;
+}
+
+.welcome-label {
+    color: var(--accent-dark);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.welcome-title {
+    font-family: 'Source Serif 4', serif;
+    font-size: 1.8rem;
+    line-height: 1.2;
+    color: var(--text);
+    margin-bottom: 14px;
+}
+
+.welcome-text {
+    color: var(--muted);
+    line-height: 1.7;
+    font-size: 0.92rem;
+}
+
+.welcome-note {
+    color: var(--accent-dark);
+    font-style: italic;
+    margin-top: 18px;
+    font-size: 0.88rem;
+}
+
 footer {
     visibility: hidden;
 }
@@ -486,11 +532,45 @@ def mensagem_vitoria(tentativas):
     return "Acertaste, finalmente. O Gerald já ia abrir um processo por demora."
 
 
+@st.dialog("🔢 O Número Secreto do Gerald")
+def boas_vindas():
+    st.markdown("""
+    <div class="welcome-card">
+        <div class="welcome-label">Departamento de Recursos Gansais</div>
+        <div class="welcome-title">O Número Secreto do Gerald</div>
+        <div class="welcome-text">
+            O Gerald escolheu um número entre <strong>1 e 100</strong>.
+            A tua missão é descobri-lo antes que a pontuação desapareça.
+            <br><br>
+            <strong>Investiga o dossier.</strong> Três pistas verdadeiras e uma absurda.
+            <br><br>
+            <strong>Analisa os palpites.</strong> O Gerald responde com pistas e comentários.
+            <br><br>
+            <strong>Controla o tempo.</strong> Cada tentativa tem um custo.
+        </div>
+        <div class="welcome-note">
+            O Gerald deseja-te boa sorte. Não prometeu facilitar.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.button("Iniciar jogo", use_container_width=True, key="iniciar_jogo"):
+        st.session_state.jogo_iniciado = True
+        st.rerun()
+
+
 if "melhor" not in st.session_state:
     st.session_state.melhor = None
 
+if "jogo_iniciado" not in st.session_state:
+    st.session_state.jogo_iniciado = False
+
 if "segredo" not in st.session_state:
     novo_jogo()
+
+if not st.session_state.jogo_iniciado:
+    boas_vindas()
+    st.stop()
 
 
 # --------------------------------------------------
@@ -503,7 +583,7 @@ st.caption(
     "Vai dar-te pistas. A maioria é séria. Algumas, nem por isso."
 )
 
-with st.expander("Instruções", expanded=not st.session_state.palpites):
+with st.expander("📋 Instruções", expanded=False):
     st.markdown(
         f"""
 1. O Gerald escolheu um **número secreto entre {MINIMO} e {MAXIMO}**.
