@@ -844,3 +844,4 @@ else:
 
 st.markdown("---")
 st.caption("Departamento de Recursos Gansais · Todas as decisões ficam sujeitas a revisão administrativa.")
+ 
