@@ -110,12 +110,7 @@ div[data-testid="stFormSubmitButton"] > button:hover {
     color: white;
 }
 
-/* Modal de boas-vindas */
-div[data-testid="stDialog"] > div {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 22px;
-}
+
 
 .welcome-card {
     background: var(--card);
@@ -542,7 +537,7 @@ def mensagem_vitoria(tentativas):
     return "Acertaste, finalmente. O Gerald já ia abrir um processo por demora."
 
 
-@st.dialog("🔢 O Número Secreto do Gerald")
+
 def boas_vindas():
     st.markdown("""
     <div class="welcome-card">
