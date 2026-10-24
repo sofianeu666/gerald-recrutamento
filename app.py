@@ -8,6 +8,13 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+
+def html(texto):
+    """Compacta HTML numa linha: sem indentação nem linhas vazias.
+    Evita que o Markdown do Streamlit trate o HTML como bloco de código."""
+    return " ".join(linha.strip() for linha in texto.splitlines() if linha.strip())
+
+
 # --------------------------------------------------
 # VISUAL
 # --------------------------------------------------
@@ -120,7 +127,8 @@ div.stButton > button:focus {
     box-shadow: 0 0 0 3px #C9785255;
 }
 
-div[data-testid="stRadio"] label {
+/* Só as opções do radio, não o rótulo da pergunta */
+div[data-testid="stRadio"] div[role="radiogroup"] label {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -150,7 +158,7 @@ footer {
 # GERALD EM SVG, DENTRO DO PRÓPRIO CÓDIGO
 # --------------------------------------------------
 
-GERALD_SVG = """
+GERALD_SVG = html("""
 <svg xmlns="http://www.w3.org/2000/svg"
      viewBox="0 0 240 210"
      width="180"
@@ -218,7 +226,7 @@ GERALD_SVG = """
         stroke="#8B4F35" stroke-width="2.5"
         stroke-linecap="round"/>
 </svg>
-"""
+""")
 
 
 # --------------------------------------------------
@@ -638,11 +646,9 @@ def obter_final(indicadores):
 # --------------------------------------------------
 
 st.markdown(
-    f"""
+    html(f"""
     <div class="ger-header">
-        <div style="text-align:center; margin-bottom:16px;">
-            {GERALD_SVG}
-        </div>
+        <div style="text-align:center; margin-bottom:16px;">{GERALD_SVG}</div>
         <div class="ger-kicker">Departamento de Recursos Humanos</div>
         <div class="ger-title">Recrutamento Gansal</div>
         <div class="ger-subtitle">
@@ -650,7 +656,7 @@ st.markdown(
             O Gerald está a avaliar a tua capacidade de sobreviver à instituição.
         </div>
     </div>
-    """,
+    """),
     unsafe_allow_html=True,
 )
 
@@ -663,21 +669,24 @@ if "jogo_iniciado" not in st.session_state:
     st.session_state.jogo_iniciado = False
 
 if not st.session_state.jogo_iniciado:
-    st.markdown("""
-    <div class="ger-card">
-        <div class="ger-label">Aviso ao candidato</div>
-        <h3>Não existe uma resposta perfeitamente segura.</h3>
-        <p>
-            As tuas decisões alteram a suspeita do Gerald, a burocracia,
-            a reputação entre colegas e a tua reserva de migalhas.
-            Algumas consequências podem ajudar-te agora e complicar o futuro.
-        </p>
-        <div class="ger-quote">
-            «O Departamento não garante que as decisões sejam justas.
-            Garante apenas que serão registadas.»
+    st.markdown(
+        html("""
+        <div class="ger-card">
+            <div class="ger-label">Aviso ao candidato</div>
+            <h3>Não existe uma resposta perfeitamente segura.</h3>
+            <p>
+                As tuas decisões alteram a suspeita do Gerald, a burocracia,
+                a reputação entre colegas e a tua reserva de migalhas.
+                Algumas consequências podem ajudar-te agora e complicar o futuro.
+            </p>
+            <div class="ger-quote">
+                «O Departamento não garante que as decisões sejam justas.
+                Garante apenas que serão registadas.»
+            </div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """),
+        unsafe_allow_html=True,
+    )
 
     st.button(
         "Iniciar candidatura",
@@ -724,12 +733,12 @@ st.caption(
 
 if st.session_state.ultimo_resultado:
     st.markdown(
-        f"""
+        html(f"""
         <div class="ger-quote">
             <strong>Consequência da decisão anterior</strong><br><br>
             {st.session_state.ultimo_resultado}
         </div>
-        """,
+        """),
         unsafe_allow_html=True,
     )
 
@@ -742,12 +751,12 @@ if indice < total:
     pergunta = st.session_state.perguntas[indice]
 
     st.markdown(
-        f"""
+        html(f"""
         <div class="ger-card">
             <div class="ger-label">{pergunta['tema']}</div>
             <h3>{pergunta['pergunta']}</h3>
         </div>
-        """,
+        """),
         unsafe_allow_html=True,
     )
 
@@ -799,13 +808,13 @@ else:
     st.markdown("## Resultado da candidatura")
 
     st.markdown(
-        f"""
+        html(f"""
         <div class="ger-card">
             <div class="ger-label">Decisão do departamento</div>
             <h2>{titulo_final}</h2>
             <p>{descricao_final}</p>
         </div>
-        """,
+        """),
         unsafe_allow_html=True,
     )
 
@@ -827,13 +836,16 @@ else:
             st.write("**Efeitos desta decisão:**")
             st.json(efeitos_visiveis)
 
-    st.markdown("""
-    <div class="ger-quote">
-        «A tua candidatura foi encerrada provisoriamente.
-        O Gerald reserva-se o direito de a reabrir por motivos relacionados
-        com migalhas, formulários ou assuntos que ainda não foram inventados.»
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        html("""
+        <div class="ger-quote">
+            «A tua candidatura foi encerrada provisoriamente.
+            O Gerald reserva-se o direito de a reabrir por motivos relacionados
+            com migalhas, formulários ou assuntos que ainda não foram inventados.»
+        </div>
+        """),
+        unsafe_allow_html=True,
+    )
 
     st.button(
         "Nova candidatura",
@@ -844,4 +856,3 @@ else:
 
 st.markdown("---")
 st.caption("Departamento de Recursos Gansais · Todas as decisões ficam sujeitas a revisão administrativa.")
- 
