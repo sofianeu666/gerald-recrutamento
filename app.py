@@ -169,6 +169,15 @@ DIFICULDADES = {
     "Modo Gerald · 1–1 000 000": (1, 1_000_000),
 }
 
+# Quantidade de pistas no dossier inicial: as dificuldades superiores
+# dão menos informação verdadeira e mais ruído burocrático.
+PISTAS_POR_DIFICULDADE = {
+    "Fácil · 1–100": (3, 1),
+    "Médio · 1–1 000": (4, 1),
+    "Difícil · 1–10 000": (4, 1),
+    "Modo Gerald · 1–1 000 000": (5, 1),
+}
+
 if "dificuldade" not in st.session_state:
     st.session_state.dificuldade = "Fácil · 1–100"
 
@@ -369,13 +378,15 @@ def factos(segredo, palpite=None, incluir_final=True):
         t = random.randint(segredo + 1, min(MAXIMO, segredo + 40))
         lista.append((f"é menor do que {t}", numeros_que(lambda n, t=t: n < t)))
 
-    # O infinito em pé é o 8
-    if segredo == 8:
-        lista.append(("é exatamente o infinito em pé", numeros_que(lambda n: n == 8)))
-    elif segredo > 8:
-        lista.append(("é maior do que o infinito em pé", numeros_que(lambda n: n > 8)))
+    # Pista de referência adaptada ao intervalo escolhido.
+    # Evita referências fixas que sejam pouco úteis ou confusas nos níveis maiores.
+    meio = (MINIMO + MAXIMO) // 2
+    if segredo == meio:
+        lista.append((f"é exatamente {meio}", numeros_que(lambda n, m=meio: n == m)))
+    elif segredo > meio:
+        lista.append((f"é maior do que {meio}", numeros_que(lambda n, m=meio: n > m)))
     else:
-        lista.append(("é menor do que o infinito em pé", numeros_que(lambda n: n < 8)))
+        lista.append((f"é menor do que {meio}", numeros_que(lambda n, m=meio: n < m)))
 
     if incluir_final:
         lista.append((f"termina em {segredo % 10}",
@@ -424,28 +435,27 @@ def todas_necessarias(conjuntos, minimo):
 
 
 def pistas_iniciais(segredo):
-    """Dossier inicial: três pistas verdadeiras e uma absurda.
-    Nenhuma pista verdadeira pode ser consequência das outras
-    (por exemplo, «dois algarismos» e «maior do que 8» nunca aparecem juntas).
-    Devolve as pistas e os números que ainda são possíveis depois delas."""
+    """Cria um dossier ajustado à dificuldade: pistas verdadeiras + absurdas."""
+    verdadeiras, absurdas = PISTAS_POR_DIFICULDADE[st.session_state.dificuldade]
     opcoes = factos(segredo, incluir_final=False)
     escolhidas = []
 
-    for minimo in (3, 2, 1):  # se for difícil, vai-se aceitando pistas menos exigentes
+    # Tenta escolher pistas que acrescentem informação independente.
+    for minimo in (3, 2, 1):
         random.shuffle(opcoes)
         escolhidas = []
         for fragmento, conjunto in opcoes:
             conjuntos = [c for _, c in escolhidas] + [conjunto]
             if todas_necessarias(conjuntos, minimo):
                 escolhidas.append((fragmento, conjunto))
-                if len(escolhidas) == 3:
+                if len(escolhidas) == verdadeiras:
                     break
-        if len(escolhidas) == 3:
+        if len(escolhidas) == verdadeiras:
             break
 
-    # Último recurso: completa com pistas verdadeiras, mesmo que repitam informação
+    # Completa se não for possível encontrar pistas totalmente independentes.
     for fragmento, conjunto in opcoes:
-        if len(escolhidas) == 3:
+        if len(escolhidas) >= verdadeiras:
             break
         if (fragmento, conjunto) in escolhidas:
             continue
@@ -457,7 +467,8 @@ def pistas_iniciais(segredo):
         escolhidas.append((fragmento, conjunto))
 
     candidatos = intersecao([c for _, c in escolhidas])
-    dossier = [f for f, _ in escolhidas] + [random.choice(DOSSIER_ABSURDAS)]
+    dossier = [f for f, _ in escolhidas]
+    dossier.extend(random.sample(DOSSIER_ABSURDAS, k=absurdas))
     random.shuffle(dossier)
     return dossier, candidatos
 
@@ -547,7 +558,7 @@ def boas_vindas():
             O Gerald escolheu um número dentro do intervalo da dificuldade selecionada.
             A tua missão é descobri-lo antes que a pontuação desapareça.
             <br><br>
-            <strong>Investiga o dossier.</strong> Três pistas verdadeiras e uma absurda.
+            <strong>Investiga o dossier.</strong> As pistas lógicas são verdadeiras; a nota absurda é apenas uma piada do Gerald.
             <br><br>
             <strong>Analisa os palpites.</strong> O Gerald responde com pistas e comentários.
             <br><br>
@@ -601,14 +612,14 @@ with st.expander("📋 Instruções", expanded=False):
     st.markdown(
         f"""
 1. O Gerald escolheu um **número secreto entre {MINIMO} e {MAXIMO}**.
-2. Escreve um palpite e carrega em **Tentar**.
-3. O **dossier** já traz umas pistas à vista. Algumas são verdadeiras, outras são disparates do Gerald. Cabe-te a ti perceber quais.
-4. Quando falhas, o Gerald dá uma **pista** (quase sempre verdadeira, de vez em quando absurda) e faz um **comentário**.
-5. A pista também pode ser **frio ou quente**: quanto mais perto do número, mais quente.
-6. **Não podes repetir palpites.** Se repetires, o Gerald cobra uma taxa de {PENALIZACAO_REPETICAO} pontos.
-7. Não há limite de tentativas, mas o Gerald está a contá-las. O **relógio começa no primeiro palpite**.
-8. A **pontuação** começa em {PONTOS_INICIAIS}. Perdes {PENALIZACAO_TENTATIVA} pontos por cada tentativa a partir da segunda, {PENALIZACAO_SEGUNDO} por cada segundo e {PENALIZACAO_REPETICAO} por cada repetição.
-9. Quando acertares, o Gerald avalia o teu desempenho.
+2. Introduz um palpite e carrega em **Tentar**. Um clique deve registar uma única tentativa.
+3. O **dossier** apresenta pistas iniciais. A quantidade de pistas verdadeiras e absurdas varia consoante a dificuldade. Cabe-te descobrir quais são fiáveis.
+4. Quando falhas, o Gerald dá-te uma **pista** e faz um **comentário**. A pista costuma ser verdadeira, mas pode ser absurda.
+5. Algumas pistas indicam a **temperatura** do palpite: quanto menor for a distância ao número secreto, mais quente estás.
+6. **Evita repetir palpites.** Se introduzires um número que já tentaste, o jogo avisa-te e o Gerald desconta {PENALIZACAO_REPETICAO} pontos.
+7. Não há limite de tentativas, mas o Gerald conta-as todas. O **relógio começa no primeiro palpite**.
+8. A pontuação começa em **{PONTOS_INICIAIS} pontos**. Perdes {PENALIZACAO_TENTATIVA} pontos por cada tentativa a partir da segunda, {PENALIZACAO_SEGUNDO} pontos por cada segundo decorrido e {PENALIZACAO_REPETICAO} pontos por cada repetição.
+9. Quando acertares, o Gerald avalia o teu desempenho. A imparcialidade não está garantida.
 """
     )
 
@@ -633,24 +644,24 @@ def mostrar_tempo():
 
 
 if not st.session_state.venceu:
-    # Sem fragmentos a serem redeclarados durante cada rerun: o formulário
-    # processa o primeiro envio e o relógio atualiza-se em cada jogada.
+    # O relógio atualiza-se sozinho a cada segundo (Streamlit recente); senão, só a cada jogada
+    ativo = st.session_state.inicio is not None
+    if hasattr(st, "fragment"):
+        try:
+            mostrar_tempo = st.fragment(run_every=1 if ativo else None)(mostrar_tempo)
+        except TypeError:
+            pass
     mostrar_tempo()
 
-    with st.form("palpite", clear_on_submit=False):
+    with st.form("palpite"):
         palpite = st.number_input(
             "O teu palpite",
             min_value=MINIMO,
             max_value=MAXIMO,
             value=min(MAXIMO, max(MINIMO, (MINIMO + MAXIMO) // 2)),
             step=1,
-            key="campo_palpite",
         )
-        tentar = st.form_submit_button(
-            "Tentar",
-            use_container_width=True,
-            key="enviar_palpite",
-        )
+        tentar = st.form_submit_button("Tentar", use_container_width=True)
 
     if tentar:
         palpite = int(palpite)
@@ -659,11 +670,11 @@ if not st.session_state.venceu:
             st.session_state.inicio = time.time()
 
         if palpite in st.session_state.palpites:
-            # Proteção de segurança: um palpite repetido não deve ser contado
-            # nem penalizado. O formulário deve responder ao primeiro envio.
+            st.session_state.repeticoes += 1
             st.session_state.mensagem = (
                 "aviso",
-                f"O {palpite} já consta no histórico. Escolhe outro número.",
+                f"Já tentaste o {palpite}. O Gerald está a cobrar taxa por repetição: "
+                f"-{PENALIZACAO_REPETICAO} pontos.",
             )
         else:
             st.session_state.palpites.append(palpite)
