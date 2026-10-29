@@ -633,24 +633,24 @@ def mostrar_tempo():
 
 
 if not st.session_state.venceu:
-    # O relógio atualiza-se sozinho a cada segundo (Streamlit recente); senão, só a cada jogada
-    ativo = st.session_state.inicio is not None
-    if hasattr(st, "fragment"):
-        try:
-            mostrar_tempo = st.fragment(run_every=1 if ativo else None)(mostrar_tempo)
-        except TypeError:
-            pass
+    # Sem fragmentos a serem redeclarados durante cada rerun: o formulário
+    # processa o primeiro envio e o relógio atualiza-se em cada jogada.
     mostrar_tempo()
 
-    with st.form("palpite"):
+    with st.form("palpite", clear_on_submit=False):
         palpite = st.number_input(
             "O teu palpite",
             min_value=MINIMO,
             max_value=MAXIMO,
             value=min(MAXIMO, max(MINIMO, (MINIMO + MAXIMO) // 2)),
             step=1,
+            key="campo_palpite",
         )
-        tentar = st.form_submit_button("Tentar", use_container_width=True)
+        tentar = st.form_submit_button(
+            "Tentar",
+            use_container_width=True,
+            key="enviar_palpite",
+        )
 
     if tentar:
         palpite = int(palpite)
@@ -659,11 +659,11 @@ if not st.session_state.venceu:
             st.session_state.inicio = time.time()
 
         if palpite in st.session_state.palpites:
-            st.session_state.repeticoes += 1
+            # Proteção de segurança: um palpite repetido não deve ser contado
+            # nem penalizado. O formulário deve responder ao primeiro envio.
             st.session_state.mensagem = (
                 "aviso",
-                f"Já tentaste o {palpite}. O Gerald está a cobrar taxa por repetição: "
-                f"-{PENALIZACAO_REPETICAO} pontos.",
+                f"O {palpite} já consta no histórico. Escolhe outro número.",
             )
         else:
             st.session_state.palpites.append(palpite)
